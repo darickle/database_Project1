@@ -1,34 +1,53 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
+import { useState, useEffect } from 'react'
 import './App.css'
+import BookList from './components/BookList'
+import BookForm from './components/BookForm'
+import SearchBar from './components/SearchBar'
+import { getBooks, searchBooks } from './services/api'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [books, setBooks] = useState([])
+  const [editingBook, setEditingBook] = useState(null)
+
+  useEffect(() => {
+    fetchBooks()
+  }, [])
+
+  const fetchBooks = async () => {
+    const data = await getBooks()
+    setBooks(data)
+  }
+
+  const handleSearch = async (searchTerm) => {
+    if (searchTerm.trim() === '') {
+      fetchBooks()
+    } else {
+      const results = await searchBooks(searchTerm)
+      setBooks(results)
+    }
+  }
 
   return (
-    <>
-      <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+    <div className="app-container">
+      <h1>Bookstore Inventory Management</h1>
+      <div className="content-container">
+        <div className="form-section">
+          <BookForm 
+            editingBook={editingBook}
+            setEditingBook={setEditingBook}
+            refreshBooks={fetchBooks}
+          />
+        </div>
+        <div className="list-section">
+          <SearchBar onSearch={handleSearch} />
+          <BookList 
+            books={books}
+            setEditingBook={setEditingBook}
+            refreshBooks={fetchBooks}
+          />
+        </div>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.jsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
