@@ -5,10 +5,11 @@ const BookForm = ({ editingBook, setEditingBook, refreshBooks }) => {
   const [formData, setFormData] = useState({
     title: '',
     isbn: '',
-    author: '',
+    author_name: '',
     price: '',
     publication_year: '',
-    stock: ''
+    stock: '',
+    category: ''
   })
 
   useEffect(() => {
@@ -36,10 +37,11 @@ const BookForm = ({ editingBook, setEditingBook, refreshBooks }) => {
       setFormData({
         title: '',
         isbn: '',
-        author: '',
+        author_name: '',
         price: '',
         publication_year: '',
-        stock: ''
+        stock: '',
+        category: ''
       })
       setEditingBook(null)
       refreshBooks()
@@ -78,8 +80,8 @@ const BookForm = ({ editingBook, setEditingBook, refreshBooks }) => {
         <label>Author</label>
         <input
           type="text"
-          name="author"
-          value={formData.author}
+          name="author_name"
+          value={formData.author_name}
           onChange={handleChange}
           required
         />
@@ -119,6 +121,17 @@ const BookForm = ({ editingBook, setEditingBook, refreshBooks }) => {
           onChange={handleChange}
           min="0"
           required
+        />
+      </div>
+
+      <div className="form-group">
+        <label>Category</label>
+        <input
+          type="text"
+          name="category"
+          value={formData.category}
+          onChange={handleChange}
+          placeholder="e.g., Fiction, Science, History"
         />
       </div>
 
