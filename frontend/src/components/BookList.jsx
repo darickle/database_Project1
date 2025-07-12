@@ -23,6 +23,7 @@ const BookList = ({ books, setEditingBook, refreshBooks }) => {
               <th>Price</th>
               <th>Year</th>
               <th>Stock</th>
+              <th>Category</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -30,11 +31,12 @@ const BookList = ({ books, setEditingBook, refreshBooks }) => {
             {books.map(book => (
               <tr key={book.id}>
                 <td>{book.title}</td>
-                <td>{book.author}</td>
+                <td>{book.author_name}</td>
                 <td>{book.isbn}</td>
                 <td>${book.price}</td>
                 <td>{book.publication_year}</td>
                 <td>{book.stock}</td>
+                <td>{book.category}</td>
                 <td className="actions">
                   <button 
                     onClick={() => setEditingBook(book)}
