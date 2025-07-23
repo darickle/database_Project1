@@ -9,7 +9,7 @@ app.use(express.json());                    // Parse incoming JSON payloads
 
 // Middleware for logging requests
 app.use((req, res, next) => {
-  console.log(`📥 ${req.method} request for '${req.url}'`);
+  console.log(`${req.method} request for '${req.url}'`);
   next();
 });
 
@@ -112,5 +112,5 @@ app.delete('/books/:id', (req, res) => {
 // Start the Server
 const PORT = 3000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server running at http://localhost:${PORT}`);
+  console.log(`Server running at http://localhost:${PORT}`);
 });
