@@ -4,19 +4,22 @@ import Register from './components/Register'
 import MainApp from './MainApp'
 
 function App() {
-  const [isLoggedIn, setIsLoggedIn] = useState(() => {
-    return localStorage.getItem('isLoggedIn') === 'true'
+  const [customer, setCustomer] = useState(() => {
+    const savedCustomer = localStorage.getItem('customer')
+    return savedCustomer ? JSON.parse(savedCustomer) : null
   })
 
   const [showRegister, setShowRegister] = useState(false)
 
-  const handleLogin = () => {
-    setIsLoggedIn(true)
+  const handleLogin = (customerData) => {
+    setCustomer(customerData)
+    localStorage.setItem('customer', JSON.stringify(customerData))
     localStorage.setItem('isLoggedIn', 'true')
   }
 
   const handleLogout = () => {
-    setIsLoggedIn(false)
+    setCustomer(null)
+    localStorage.removeItem('customer')
     localStorage.removeItem('isLoggedIn')
   }
 
@@ -32,8 +35,8 @@ function App() {
     setShowRegister(false)
   }
 
-  if (isLoggedIn) {
-    return <MainApp onLogout={handleLogout} />
+  if (customer) {
+    return <MainApp customer={customer} onLogout={handleLogout} />
   }
 
   if (showRegister) {

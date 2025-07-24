@@ -2,7 +2,32 @@
 const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');
+const crypto = require('crypto');
 const app = express();
+
+// AES-256 encryption configuration
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32); // 32 bytes key for AES-256
+const IV_LENGTH = 16; // For AES, this is always 16
+
+// Encryption function
+function encrypt(text) {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+// Decryption function
+function decrypt(text) {
+  const textParts = text.split(':');
+  const iv = Buffer.from(textParts.shift(), 'hex');
+  const encryptedText = textParts.join(':');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
 
 // Middleware setup
 app.use(cors());
@@ -110,12 +135,15 @@ app.post('/customers/register', (req, res) => {
     return res.status(400).json({ error: "Password must be at least 6 characters long" });
   }
   
+  // Encrypt the password before storing
+  const encryptedPassword = encrypt(password);
+  
   const sql = `
     INSERT INTO customers (firstName, lastName, emailAddress, phone, shippingAddress, password)
     VALUES (?, ?, ?, ?, ?, ?)
   `;
   
-  db.query(sql, [firstName, lastName, emailAddress, phone || '', shippingAddress || '', password], (err, result) => {
+  db.query(sql, [firstName, lastName, emailAddress, phone || '', shippingAddress || '', encryptedPassword], (err, result) => {
     if (err) {
       console.error('Error registering customer:', err);
       if (err.code === 'ER_DUP_ENTRY') {
@@ -145,27 +173,42 @@ app.post('/customers/login', (req, res) => {
     });
   }
   
-  const sql = "SELECT * FROM customers WHERE emailAddress = ? AND password = ?";
+  const sql = "SELECT * FROM customers WHERE emailAddress = ?";
   
-  db.query(sql, [emailAddress, password], (err, results) => {
+  db.query(sql, [emailAddress], (err, results) => {
     if (err) {
       console.error('Error during login:', err);
       return res.status(500).json({ error: 'Database error', details: err });
     }
     
     if (results.length === 0) {
-      console.log('Login failed: Invalid credentials');
+      console.log('Login failed: User not found');
       return res.status(401).json({ error: "Invalid email or password" });
     }
     
     const customer = results[0];
-    delete customer.password;
     
-    console.log(`Customer logged in successfully: ${customer.customerId}`);
-    return res.json({ 
-      message: "Login successful",
-      customer: customer
-    });
+    try {
+      // Decrypt the stored password and compare with provided password
+      const decryptedPassword = decrypt(customer.password);
+      
+      if (decryptedPassword !== password) {
+        console.log('Login failed: Invalid password');
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+      
+      // Remove password from response for security
+      delete customer.password;
+      
+      console.log(`Customer logged in successfully: ${customer.customerId}`);
+      return res.json({ 
+        message: "Login successful",
+        customer: customer
+      });
+    } catch (decryptError) {
+      console.error('Error decrypting password:', decryptError);
+      return res.status(500).json({ error: "Authentication error" });
+    }
   });
 });
 
@@ -504,6 +547,7 @@ app.listen(PORT, () => {
   console.log('BookNest Customer API Server is running!');
   console.log(`Server URL: http://localhost:${PORT}`);
   console.log('Database: BookNest (MySQL)');
+  console.log('Security: AES-256 password encryption enabled');
   console.log('Available endpoints:');
   console.log('BOOK ENDPOINTS (READ-ONLY):');
   console.log('GET    /                           - Welcome message');

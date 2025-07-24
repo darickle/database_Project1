@@ -1,41 +1,53 @@
-// OrderHistory.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import { getCustomerOrders } from '../services/api';
 
-const fakeOrders = [
-  {
-    orderId: 1,
-    date: '2025-07-20',
-    total: 59.99,
-    items: [
-      { bookId: 101, title: 'Book A', quantity: 1, price: 19.99 },
-      { bookId: 102, title: 'Book B', quantity: 2, price: 20.00 },
-    ],
-  },
-  {
-    orderId: 2,
-    date: '2025-06-15',
-    total: 29.99,
-    items: [
-      { bookId: 103, title: 'Book C', quantity: 1, price: 29.99 },
-    ],
-  },
-];
+export default function OrderHistory({ customerId }) {
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-export default function OrderHistory() {
+  useEffect(() => {
+    fetchOrders();
+  }, [customerId]);
+
+  const fetchOrders = async () => {
+    if (!customerId) return;
+    
+    try {
+      setLoading(true);
+      const orderData = await getCustomerOrders(customerId);
+      setOrders(orderData);
+      setError('');
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+      setError('Failed to load order history');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return <div>Loading order history...</div>;
+  }
+
+  if (error) {
+    return <div style={{color: 'red'}}>Error: {error}</div>;
+  }
+
   return (
     <div>
       <h2>Your Order History</h2>
-      {fakeOrders.length === 0 ? (
+      {orders.length === 0 ? (
         <p>No past orders found.</p>
       ) : (
-        fakeOrders.map(order => (
+        orders.map(order => (
           <div key={order.orderId} style={{ border: '1px solid #ccc', marginBottom: 10, padding: 10 }}>
-            <div><strong>Order #{order.orderId}</strong> - {new Date(order.date).toLocaleDateString()}</div>
-            <div>Total: ${order.total.toFixed(2)}</div>
+            <div><strong>Order #{order.orderId}</strong> - {new Date(order.orderDate).toLocaleDateString()}</div>
+            <div>Total: ${order.totalAmount.toFixed(2)}</div>
             <ul>
               {order.items.map(item => (
-                <li key={item.bookId}>
-                  {item.title} x {item.quantity} (${item.price.toFixed(2)} each)
+                <li key={item.itemId}>
+                  {item.title} by {item.author_name} x {item.quantity} (${item.unitPrice.toFixed(2)} each = ${item.totalPrice.toFixed(2)})
                 </li>
               ))}
             </ul>

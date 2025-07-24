@@ -3,32 +3,43 @@ import './App.css'
 import BookList from './components/BookList'
 import SearchBar from './components/SearchBar'
 import Cart from './components/Cart'
-import OrderHistory from './components/OrderHistory'  // <-- import added
-import { getBooks } from './services/api'
+import OrderHistory from './components/OrderHistory'
+import { getBooks, searchBooks, createOrder } from './services/api'
 
-function MainApp({ onLogout }) {
+function MainApp({ customer, onLogout }) {
   const [books, setBooks] = useState([])
   const [cart, setCart] = useState([])
-  const [activeTab, setActiveTab] = useState('books') // 'books', 'cart', or 'orderHistory' now
+  const [activeTab, setActiveTab] = useState('books')
 
   useEffect(() => {
     fetchBooks()
   }, [])
 
   const fetchBooks = async () => {
-    const data = await getBooks()
-    setBooks(data)
+    try {
+      const data = await getBooks()
+      setBooks(data)
+    } catch (error) {
+      console.error('Error fetching books:', error)
+    }
   }
 
   const handleSearch = async ({ title, minPrice, maxPrice }) => {
-    const allBooks = await getBooks()
-    const filtered = allBooks.filter(book => {
-      const matchesTitle = title === '' || book.title.toLowerCase().includes(title.toLowerCase())
-      const matchesMinPrice = minPrice === null || book.price >= minPrice
-      const matchesMaxPrice = maxPrice === null || book.price <= maxPrice
-      return matchesTitle && matchesMinPrice && matchesMaxPrice
-    })
-    setBooks(filtered)
+    try {
+      const filtered = await searchBooks({ title, minPrice, maxPrice })
+      setBooks(filtered)
+    } catch (error) {
+      console.error('Error searching books:', error)
+      // Fallback to client-side filtering if search fails
+      const allBooks = await getBooks()
+      const filtered = allBooks.filter(book => {
+        const matchesTitle = title === '' || book.title.toLowerCase().includes(title.toLowerCase())
+        const matchesMinPrice = minPrice === null || book.price >= minPrice
+        const matchesMaxPrice = maxPrice === null || book.price <= maxPrice
+        return matchesTitle && matchesMinPrice && matchesMaxPrice
+      })
+      setBooks(filtered)
+    }
   }
 
   const handleAddToCart = (book, quantity) => {
@@ -65,35 +76,36 @@ function MainApp({ onLogout }) {
   }
 
   const handlePlaceOrder = async () => {
-  if (cart.length === 0) {
-    alert('Your cart is empty.')
-    return
-  }
-
-  try {
-    const response = await fetch('http://localhost:3001/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ cart }),
-    })
-
-    if (!response.ok) {
-      throw new Error('Failed to place order')
+    if (cart.length === 0) {
+      alert('Your cart is empty.')
+      return
     }
 
-    alert('Order placed successfully!')
-    handleClearCart()
-    fetchBooks() // Refresh the catalog with updated stock
-  } catch (error) {
-    console.error('Order error:', error)
-    alert('Failed to place order.')
-  }
-}
+    try {
+      const orderData = {
+        customerId: customer.customerId,
+        items: cart.map(item => ({
+          bookId: item.id,
+          quantity: item.quantity
+        }))
+      }
 
+      await createOrder(orderData)
+      alert('Order placed successfully!')
+      handleClearCart()
+      fetchBooks() // Refresh the catalog with updated stock
+    } catch (error) {
+      console.error('Order error:', error)
+      alert(`Failed to place order: ${error.message}`)
+    }
+  }
 
   return (
     <div className="app-container">
       <h1>BookNest</h1>
+      <div className="user-info">
+        Welcome, {customer.firstName} {customer.lastName}!
+      </div>
 
       <div className="tabs">
         <button
@@ -108,7 +120,6 @@ function MainApp({ onLogout }) {
         >
           Cart ({cart.reduce((acc, item) => acc + item.quantity, 0)})
         </button>
-        {/* New Order History tab */}
         <button
           className={activeTab === 'orderHistory' ? 'tab active' : 'tab'}
           onClick={() => setActiveTab('orderHistory')}
@@ -135,9 +146,8 @@ function MainApp({ onLogout }) {
         />
       )}
 
-      {/* Render OrderHistory tab content */}
       {activeTab === 'orderHistory' && (
-        <OrderHistory />
+        <OrderHistory customerId={customer.customerId} />
       )}
 
       <button className="logout-btn" onClick={onLogout}>
