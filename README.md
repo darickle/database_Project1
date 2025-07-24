@@ -1,14 +1,16 @@
-# Bookstore Inventory Management System
+# BookNest - Online Bookstore
 
-A full-stack web application for managing BookNest's inventory, built with MySQL, Express, React, and Node.js.
+A full-stack web application for BookNest's online bookstore, built with MySQL, Express, React, and Node.js. Customers can browse books, create accounts, and place orders securely.
 
 ## Features
 
-- **Add New Books**: Create new book entries with title, ISBN, author, price, publication year, stock, and category
-- **Edit Books**: Update existing book information
-- **Delete Books**: Remove books from the inventory
-- **Search Books**: Search for books by title
-- **View Inventory**: Display all books in a formatted table
+- **Customer Registration**: Secure account creation with AES-256 encrypted passwords
+- **Customer Login**: Authentication system for user accounts
+- **Browse Books**: View complete book catalog with details (title, author, price, stock, etc.)
+- **Search Books**: Search for books by title and filter by price range
+- **Shopping Cart**: Add books to cart and place order
+- **Order Management**: View order history
+- **Inventory Tracking**: Real-time stock updates when orders are placed
 
 ## Tech Stack
 
@@ -35,27 +37,23 @@ Before running this application, make sure you have the following installed:
 ## Database Setup
 
 1. **Start MySQL** service on your machine
-2. **Create a database** named `BookNest`:
-   ```sql
-   CREATE DATABASE BookNest;
-   ```
-3. **Create the books table**:
-   ```sql
-   USE BookNest;
+
+2. **Run the complete database schema** by executing the SQL script provided in the repository:
+   - Copy the contents from [`backend/databaseSchema.sql`](backend/databaseSchema.sql)
+   - Execute the script in your MySQL client (MySQL Workbench, phpMyAdmin, or command line)
    
-   CREATE TABLE books (
-     id INT AUTO_INCREMENT PRIMARY KEY,
-     title VARCHAR(255) NOT NULL,
-     isbn VARCHAR(20) NOT NULL UNIQUE,
-     author_name VARCHAR(255) NOT NULL,
-     price DECIMAL(10,2) NOT NULL,
-     publication_year INT NOT NULL,
-     stock INT NOT NULL DEFAULT 0,
-     category VARCHAR(100),
-     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-   );
-   ```
+3. **The schema includes**:
+   - Complete database and table creation
+   - Sample book data for testing
+   - Customer and order management tables
+   - Performance indexes
+   - Foreign key relationships
+
+4. **Verify setup** by checking that the following tables exist:
+   - `books` - Book inventory
+   - `customers` - Customer accounts  
+   - `orders` - Order records
+   - `orderItems` - Order line items
 
 ## Installation
 
@@ -112,38 +110,21 @@ npm run dev
 
 The frontend will run on `http://localhost:5173`
 
-### Books
+## API Endpoints
 
+### Books
 - `GET /` - Welcome message
 - `GET /books` - Get all books
-- `GET /books/search/:title` - Search books by title
-- `POST /books` - Create a new book
-- `PUT /books/:id` - Update a book by ID
-- `DELETE /books/:id` - Delete a book by ID
+- `GET /books/search` - Search books by title, price range
 
-### Example API Request
+### Customers
+- `POST /customers/register` - Register a new customer
+- `POST /customers/login` - Customer login
+- `GET /customers/profile/:customerId` - Get customer profile
 
-**Create a new book:**
-```bash
-curl -X POST http://localhost:3000/books \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "The Great Gatsby",
-    "isbn": "9780743273565",
-    "author_name": "F. Scott Fitzgerald",
-    "price": 15.99,
-    "publication_year": 1925,
-    "stock": 10,
-    "category": "Fiction"
-  }'
-```
-
-## Usage
-
-1. **Adding Books**: Fill out the form on the left side and click "Add Book"
-2. **Editing Books**: Click the "Edit" button next to any book in the table
-3. **Deleting Books**: Click the "Delete" button (you'll be asked to confirm)
-4. **Searching**: Use the search bar to find books by title
+### Orders
+- `POST /orders` - Create a new order
+- `GET /orders/customer/:customerId` - Get customer's order history
 
 ## Authors
 
