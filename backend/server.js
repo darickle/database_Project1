@@ -3,16 +3,30 @@ const express = require('express');
 const mysql = require('mysql');
 const cors = require('cors');
 const crypto = require('crypto');
+
+// Load environment variables
+require('dotenv').config();
+
 const app = express();
 
 // AES-256 encryption configuration
-const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32); // 32 bytes key for AES-256
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY;
+
+if (!ENCRYPTION_KEY) {
+  console.error('ENCRYPTION_KEY environment variable is required');
+  console.log('Generate one with: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"');
+  console.log('Then add it to your .env file: ENCRYPTION_KEY=your-generated-key');
+  process.exit(1);
+}
+
+// Convert hex string to buffer for AES-256
+const ENCRYPTION_KEY_BUFFER = Buffer.from(ENCRYPTION_KEY, 'hex');
 const IV_LENGTH = 16; // For AES, this is always 16
 
 // Encryption function
 function encrypt(text) {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY_BUFFER, iv);
   let encrypted = cipher.update(text, 'utf8', 'hex');
   encrypted += cipher.final('hex');
   return iv.toString('hex') + ':' + encrypted;
@@ -20,13 +34,21 @@ function encrypt(text) {
 
 // Decryption function
 function decrypt(text) {
-  const textParts = text.split(':');
-  const iv = Buffer.from(textParts.shift(), 'hex');
-  const encryptedText = textParts.join(':');
-  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
-  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
-  decrypted += decipher.final('utf8');
-  return decrypted;
+  try {
+    const textParts = text.split(':');
+    if (textParts.length !== 2) {
+      throw new Error('Invalid encrypted format');
+    }
+    const iv = Buffer.from(textParts[0], 'hex');
+    const encryptedText = textParts[1];
+    const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY_BUFFER, iv);
+    let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+    decrypted += decipher.final('utf8');
+    return decrypted;
+  } catch (error) {
+    console.error('Decryption error details:', error.message);
+    throw new Error('Failed to decrypt password - may need to re-register user');
+  }
 }
 
 // Middleware setup
@@ -34,17 +56,24 @@ app.use(cors());
 app.use(express.json());
 app.use((req, res, next) => {
   console.log(`${req.method} request for '${req.url}'`);
-  console.log('Request body:', req.body);
+  
+  // Redact sensitive information from logs
+  const logBody = { ...req.body };
+  if (logBody.password) {
+    logBody.password = '[REDACTED]';
+  }
+  
+  console.log('Request body:', logBody);
   next();
 });
 
 // Database connection setup
 const db = mysql.createConnection({
-  host: "localhost",
-  user: "root",
-  password: "",
-  database: "BookNest",
-  port: 3306
+  host: process.env.DB_HOST || "localhost",
+  user: process.env.DB_USER || "root",
+  password: process.env.DB_PASSWORD || "",
+  database: process.env.DB_NAME || "BookNest",
+  port: process.env.DB_PORT || 3306
 });
 
 // Connect to the database
@@ -206,8 +235,11 @@ app.post('/customers/login', (req, res) => {
         customer: customer
       });
     } catch (decryptError) {
-      console.error('Error decrypting password:', decryptError);
-      return res.status(500).json({ error: "Authentication error" });
+      console.error('Error decrypting password:', decryptError.message);
+      return res.status(500).json({ 
+        error: "Authentication error", 
+        message: "Password decryption failed. You may need to register again if the server encryption key has changed." 
+      });
     }
   });
 });
@@ -548,6 +580,8 @@ app.listen(PORT, () => {
   console.log(`Server URL: http://localhost:${PORT}`);
   console.log('Database: BookNest (MySQL)');
   console.log('Security: AES-256 password encryption enabled');
+  console.log(`Encryption Key: Loaded from environment variable ✅`);
+  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('Available endpoints:');
   console.log('BOOK ENDPOINTS (READ-ONLY):');
   console.log('GET    /                           - Welcome message');
