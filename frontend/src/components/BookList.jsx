@@ -53,42 +53,76 @@ const BookList = ({ books, cart, onAddToCart }) => {
             </tr>
           </thead>
           <tbody>
-            {books.map(book => {
-              const availableStock = getAvailableStock(book.id, book.stock)
-              return (
-                <tr key={book.id}>
+            {/* Books with stock > 0 */}
+            {books
+              .filter(book => book.stock > 0)
+              .map(book => {
+                const availableStock = getAvailableStock(book.id, book.stock)
+                return (
+                  <tr key={book.id}>
+                    <td>{book.title}</td>
+                    <td>{book.author_name}</td>
+                    <td>{book.isbn}</td>
+                    <td>${book.price}</td>
+                    <td>{book.publication_year}</td>
+                    <td>{book.stock}</td>
+                    <td>{book.category}</td>
+                    <td>
+                      <input
+                        type="number"
+                        min="1"
+                        max={availableStock}
+                        value={quantities[book.id] || 1}
+                        onChange={(e) =>
+                          handleQuantityChange(book.id, e.target.value, availableStock)
+                        }
+                        style={{ width: '50px' }}
+                        disabled={availableStock === 0}
+                      />
+                    </td>
+                    <td className="actions">
+                      <button
+                        onClick={() => handleAddClick(book)}
+                        className="submit-btn"
+                        disabled={availableStock === 0}
+                      >
+                        Add to Cart
+                      </button>
+                    </td>
+                  </tr>
+                )
+              })}
+            
+            {/* Books with stock = 0 (out of stock) */}
+            {books
+              .filter(book => book.stock === 0)
+              .map(book => (
+                <tr key={book.id} className="out-of-stock-row">
                   <td>{book.title}</td>
                   <td>{book.author_name}</td>
                   <td>{book.isbn}</td>
                   <td>${book.price}</td>
                   <td>{book.publication_year}</td>
-                  <td>{book.stock}</td>
+                  <td className="stock-zero">{book.stock}</td>
                   <td>{book.category}</td>
                   <td>
                     <input
                       type="number"
-                      min="1"
-                      max={availableStock}
-                      value={quantities[book.id] || 1}
-                      onChange={(e) =>
-                        handleQuantityChange(book.id, e.target.value, availableStock)
-                      }
+                      value="0"
                       style={{ width: '50px' }}
-                      disabled={availableStock === 0}
+                      disabled
                     />
                   </td>
                   <td className="actions">
                     <button
-                      onClick={() => handleAddClick(book)}
-                      className="submit-btn"
-                      disabled={availableStock === 0}
+                      className="out-of-stock-btn"
+                      disabled
                     >
-                      Add to Cart
+                      Out of Stock
                     </button>
                   </td>
                 </tr>
-              )
-            })}
+              ))}
           </tbody>
         </table>
       )}
