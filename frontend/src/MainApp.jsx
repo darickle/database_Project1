@@ -10,6 +10,7 @@ function MainApp({ customer, onLogout }) {
   const [books, setBooks] = useState([])
   const [cart, setCart] = useState([])
   const [activeTab, setActiveTab] = useState('books')
+  const [notification, setNotification] = useState(null)
 
   useEffect(() => {
     fetchBooks()
@@ -22,6 +23,11 @@ function MainApp({ customer, onLogout }) {
     } catch (error) {
       console.error('Error fetching books:', error)
     }
+  }
+
+  const showNotification = (message, type = 'success') => {
+    setNotification({ message, type })
+    setTimeout(() => setNotification(null), 3000) // Auto-hide after 3 seconds
   }
 
   const handleSearch = async ({ title, minPrice, maxPrice }) => {
@@ -46,12 +52,15 @@ function MainApp({ customer, onLogout }) {
     setCart(prev => {
       const existing = prev.find(item => item.id === book.id)
       if (existing) {
-        return prev.map(item =>
+        const newCart = prev.map(item =>
           item.id === book.id
             ? { ...item, quantity: item.quantity + quantity }
             : item
         )
+        showNotification(`Added ${quantity} more "${book.title}" to cart`)
+        return newCart
       } else {
+        showNotification(`Added "${book.title}" to cart`)
         return [...prev, { ...book, quantity }]
       }
     })
@@ -77,7 +86,7 @@ function MainApp({ customer, onLogout }) {
 
   const handlePlaceOrder = async () => {
     if (cart.length === 0) {
-      alert('Your cart is empty.')
+      showNotification('Your cart is empty.', 'error')
       return
     }
 
@@ -91,17 +100,22 @@ function MainApp({ customer, onLogout }) {
       }
 
       await createOrder(orderData)
-      alert('Order placed successfully!')
+      showNotification('Order placed successfully!')
       handleClearCart()
       fetchBooks() // Refresh the catalog with updated stock
     } catch (error) {
       console.error('Order error:', error)
-      alert(`Failed to place order: ${error.message}`)
+      showNotification(`Failed to place order: ${error.message}`, 'error')
     }
   }
 
   return (
     <div className="app-container">
+      {notification && (
+        <div className={`notification ${notification.type}`}>
+          {notification.message}
+        </div>
+      )}
       <h1>BookNest</h1>
       <div className="user-info">
         Welcome, {customer.firstName} {customer.lastName}!

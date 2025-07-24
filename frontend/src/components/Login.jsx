@@ -27,6 +27,7 @@ function Login({ onLogin, onShowRegister }) {
 
   return (
     <div className="login-container">
+      <h1>BookNest</h1>
       <h2>Login</h2>
       <form onSubmit={handleSubmit} className="login-form">
         <label>
