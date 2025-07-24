@@ -197,6 +197,38 @@ tr:hover {
   background-color: #2980b9;
 }
 
+/* Out of stock styles */
+.out-of-stock-row {
+  opacity: 0.6;
+  background-color: #f8f9fa;
+}
+
+.out-of-stock-row td {
+  color: #6c757d;
+}
+
+.stock-zero {
+  color: #e74c3c;
+  font-weight: bold;
+}
+
+.out-of-stock-btn {
+  background-color: #6c757d;
+  color: white;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 0.75rem;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.out-of-stock-btn:disabled {
+  background-color: #6c757d;
+  cursor: not-allowed;
+}
+
 .delete-btn {
   background-color: #e74c3c;
   color: white;
