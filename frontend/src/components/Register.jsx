@@ -1,26 +1,38 @@
 import { useState } from 'react'
+import { registerCustomer } from '../services/api'
 import './Register.css'
 
 function Register({ onRegisterSuccess, onCancel }) {
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
+    firstName: '',
+    lastName: '',
+    emailAddress: '',
     phone: '',
     shippingAddress: '',
     password: '',
   })
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
 
   const handleChange = e => {
     const { name, value } = e.target
     setFormData(prev => ({ ...prev, [name]: value }))
   }
 
-  const handleSubmit = e => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-    // Here you would normally call an API to register the user.
-    // For now, just simulate success:
-    alert('Registration successful! Please log in.')
-    onRegisterSuccess()
+    setLoading(true)
+    setError('')
+    
+    try {
+      await registerCustomer(formData)
+      alert('Registration successful! Please log in.')
+      onRegisterSuccess()
+    } catch (error) {
+      setError(error.message)
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
@@ -28,11 +40,22 @@ function Register({ onRegisterSuccess, onCancel }) {
       <h2>Register</h2>
       <form onSubmit={handleSubmit} className="register-form">
         <label>
-          Name:<br />
+          First Name:<br />
           <input
             type="text"
-            name="name"
-            value={formData.name}
+            name="firstName"
+            value={formData.firstName}
+            onChange={handleChange}
+            required
+          />
+        </label>
+        <br />
+        <label>
+          Last Name:<br />
+          <input
+            type="text"
+            name="lastName"
+            value={formData.lastName}
             onChange={handleChange}
             required
           />
@@ -42,8 +65,8 @@ function Register({ onRegisterSuccess, onCancel }) {
           Email:<br />
           <input
             type="email"
-            name="email"
-            value={formData.email}
+            name="emailAddress"
+            value={formData.emailAddress}
             onChange={handleChange}
             required
           />
@@ -79,9 +102,12 @@ function Register({ onRegisterSuccess, onCancel }) {
           />
         </label>
         <br />
+        {error && <p className="error-msg" style={{color: 'red'}}>{error}</p>}
         <div className="register-form-buttons">
-          <button type="submit">Register</button>
-          <button type="button" onClick={onCancel}>Cancel</button>
+          <button type="submit" disabled={loading}>
+            {loading ? 'Registering...' : 'Register'}
+          </button>
+          <button type="button" onClick={onCancel} disabled={loading}>Cancel</button>
         </div>
       </form>
     </div>

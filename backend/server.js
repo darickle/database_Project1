@@ -1,116 +1,583 @@
-// Imports and Middleware Setup
-const express = require('express');         // Web framework
-const mysql = require('mysql');             // MySQL driver
-const cors = require('cors');               // Cross-origin support
-const app = express();                      // Initialize Express app
+// Import necessary modules
+const express = require('express');
+const mysql = require('mysql');
+const cors = require('cors');
+const crypto = require('crypto');
+const app = express();
 
-app.use(cors());                            // Allow cross-origin requests from frontend
-app.use(express.json());                    // Parse incoming JSON payloads
+// AES-256 encryption configuration
+const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || crypto.randomBytes(32); // 32 bytes key for AES-256
+const IV_LENGTH = 16; // For AES, this is always 16
 
-// Middleware for logging requests
+// Encryption function
+function encrypt(text) {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let encrypted = cipher.update(text, 'utf8', 'hex');
+  encrypted += cipher.final('hex');
+  return iv.toString('hex') + ':' + encrypted;
+}
+
+// Decryption function
+function decrypt(text) {
+  const textParts = text.split(':');
+  const iv = Buffer.from(textParts.shift(), 'hex');
+  const encryptedText = textParts.join(':');
+  const decipher = crypto.createDecipheriv('aes-256-cbc', ENCRYPTION_KEY, iv);
+  let decrypted = decipher.update(encryptedText, 'hex', 'utf8');
+  decrypted += decipher.final('utf8');
+  return decrypted;
+}
+
+// Middleware setup
+app.use(cors());
+app.use(express.json());
 app.use((req, res, next) => {
   console.log(`${req.method} request for '${req.url}'`);
+  console.log('Request body:', req.body);
   next();
 });
 
-// MySQL Database Configuration
+// Database connection setup
 const db = mysql.createConnection({
   host: "localhost",
   user: "root",
   password: "",
-  database: "BookNest", // Name of database
+  database: "BookNest",
   port: 3306
 });
 
-// Test DB Connection
+// Connect to the database
 db.connect((err) => {
   if (err) {
     console.error("Database connection failed:", err.stack);
     return;
   }
-  console.log("Connected to MySQL database.");
+  console.log("Connected to MySQL database with thread ID:", db.threadId);
 });
-
-// GET /
-// Welcome route
 app.get('/', (req, res) => {
-  res.json("Welcome to the Bookstore Inventory API");
+  res.json("Welcome to the BookNest Inventory API");
 });
 
-// GET /books
-// Fetch all books
+// Endpoint to get all books
 app.get('/books', (req, res) => {
+  console.log('Fetching all books from database...');
   const sql = "SELECT * FROM books";
+  
   db.query(sql, (err, data) => {
-    if (err) return res.status(500).json(err);
+    if (err) {
+      console.error('Error getting books:', err);
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    console.log(`Successfully got ${data.length} books`);
     return res.json(data);
   });
 });
 
-// GET /books/search/:title
-// Search books by title
-app.get('/books/search/:title', (req, res) => {
-  const title = req.params.title;
-  const sql = "SELECT * FROM books WHERE title LIKE ?";
-  db.query(sql, [`%${title}%`], (err, results) => {
-    if (err) return res.status(500).json(err);
+// Endpoint to search books
+app.get('/books/search', (req, res) => {
+  const { q, title, minPrice, maxPrice } = req.query;
+  const searchTitle = q || title;
+  
+  console.log('Book search params:', { searchTitle, minPrice, maxPrice });
+  
+  let sql = "SELECT * FROM books WHERE 1=1";
+  const params = [];
+  
+  if (searchTitle && searchTitle.trim()) {
+    sql += " AND title LIKE ?";
+    params.push(`%${searchTitle.trim()}%`);
+  }
+  
+  if (minPrice && !isNaN(minPrice)) {
+    sql += " AND price >= ?";
+    params.push(parseFloat(minPrice));
+  }
+  
+  if (maxPrice && !isNaN(maxPrice)) {
+    sql += " AND price <= ?";
+    params.push(parseFloat(maxPrice));
+  }
+  
+  sql += " ORDER BY title";
+  
+  db.query(sql, params, (err, results) => {
+    if (err) {
+      console.error('Error in book search:', err);
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    console.log(`Book search returned ${results.length} books`);
     return res.json(results);
   });
 });
 
-// POST /books
-// Add a new book
-app.post('/books', (req, res) => {
-  const { title, isbn, price, publication_year, stock, author_name, category } = req.body;
+// Endpoint to register a new customer
+app.post('/customers/register', (req, res) => {
+  const { firstName, lastName, emailAddress, phone, shippingAddress, password } = req.body;
   
-  if (!title || !isbn || !price || !publication_year || stock === undefined) {
-    return res.status(400).json({ message: "Required fields are missing." });
+  console.log('Attempting to register new customer:', { firstName, lastName, emailAddress, phone });
+  
+  if (!firstName || !lastName || !emailAddress || !password) {
+    return res.status(400).json({ 
+      error: "Required fields are missing",
+      required: ["firstName", "lastName", "emailAddress", "password"]
+    });
   }
-
+  
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(emailAddress)) {
+    return res.status(400).json({ error: "Invalid email format" });
+  }
+  
+  if (password.length < 6) {
+    return res.status(400).json({ error: "Password must be at least 6 characters long" });
+  }
+  
+  // Encrypt the password before storing
+  const encryptedPassword = encrypt(password);
+  
   const sql = `
-    INSERT INTO books (title, isbn, price, publication_year, stock, author_name, category)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO customers (firstName, lastName, emailAddress, phone, shippingAddress, password)
+    VALUES (?, ?, ?, ?, ?, ?)
   `;
-
-  db.query(sql, [title, isbn, price, publication_year, stock, author_name || '', category || ''], (err, result) => {
-    if (err) return res.status(500).json(err);
-    return res.status(201).json({ message: "Book added successfully", bookId: result.insertId });
+  
+  db.query(sql, [firstName, lastName, emailAddress, phone || '', shippingAddress || '', encryptedPassword], (err, result) => {
+    if (err) {
+      console.error('Error registering customer:', err);
+      if (err.code === 'ER_DUP_ENTRY') {
+        return res.status(409).json({ error: "Email address already exists" });
+      }
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    console.log(`Customer registered successfully with ID: ${result.insertId}`);
+    return res.status(201).json({ 
+      message: "Customer registered successfully", 
+      customerId: result.insertId,
+      customer: { firstName, lastName, emailAddress, phone }
+    });
   });
 });
 
-// PUT /books/:id
-// Update book details by ID
-app.put('/books/:id', (req, res) => {
-  const bookId = req.params.id;
-  const { title, isbn, price, publication_year, stock, author_name, category } = req.body;
+// Endpoint to login a customer
+app.post('/customers/login', (req, res) => {
+  const { emailAddress, password } = req.body;
+  
+  console.log('Login attempt for email:', emailAddress);
+  
+  if (!emailAddress || !password) {
+    return res.status(400).json({ 
+      error: "Email and password are required" 
+    });
+  }
+  
+  const sql = "SELECT * FROM customers WHERE emailAddress = ?";
+  
+  db.query(sql, [emailAddress], (err, results) => {
+    if (err) {
+      console.error('Error during login:', err);
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    if (results.length === 0) {
+      console.log('Login failed: User not found');
+      return res.status(401).json({ error: "Invalid email or password" });
+    }
+    
+    const customer = results[0];
+    
+    try {
+      // Decrypt the stored password and compare with provided password
+      const decryptedPassword = decrypt(customer.password);
+      
+      if (decryptedPassword !== password) {
+        console.log('Login failed: Invalid password');
+        return res.status(401).json({ error: "Invalid email or password" });
+      }
+      
+      // Remove password from response for security
+      delete customer.password;
+      
+      console.log(`Customer logged in successfully: ${customer.customerId}`);
+      return res.json({ 
+        message: "Login successful",
+        customer: customer
+      });
+    } catch (decryptError) {
+      console.error('Error decrypting password:', decryptError);
+      return res.status(500).json({ error: "Authentication error" });
+    }
+  });
+});
 
+// Endpoint to get customer profile
+app.get('/customers/:id', (req, res) => {
+  const customerId = req.params.id;
+  
+  console.log(`Fetching profile for customer ID: ${customerId}`);
+  
+  if (isNaN(customerId) || customerId <= 0) {
+    return res.status(400).json({ error: "Invalid customer ID" });
+  }
+  
+  const sql = "SELECT customerId, firstName, lastName, emailAddress, phone, shippingAddress FROM customers WHERE customerId = ?";
+  
+  db.query(sql, [customerId], (err, results) => {
+    if (err) {
+      console.error('Error fetching customer profile:', err);
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Customer not found" });
+    }
+    
+    console.log(`Customer profile retrieved for ID: ${customerId}`);
+    return res.json(results[0]);
+  });
+});
+
+// Endpoint to create a new order
+app.post('/orders', (req, res) => {
+  const { customerId, items } = req.body;
+  
+  console.log('Attempting to create new order for customer:', customerId);
+  console.log('Order items:', items);
+  
+  if (!customerId || !items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ 
+      error: "Customer ID and items array are required" 
+    });
+  }
+  
+  if (isNaN(customerId) || customerId <= 0) {
+    return res.status(400).json({ error: "Invalid customer ID" });
+  }
+  
+  for (let item of items) {
+    if (!item.bookId || !item.quantity || item.quantity <= 0) {
+      return res.status(400).json({ 
+        error: "Each item must have bookId and positive quantity" 
+      });
+    }
+  }
+  
+  // Start transaction to ensure atomicity
+  db.beginTransaction((err) => {
+    if (err) {
+      console.error('Error starting transaction:', err);
+      return res.status(500).json({ error: 'Transaction error' });
+    }
+    
+    let totalAmount = 0;
+    let processedItems = [];
+    let itemsProcessed = 0;
+    
+    items.forEach((item, index) => {
+      const sql = "SELECT id, title, price, stock FROM books WHERE id = ?";
+      
+      db.query(sql, [item.bookId], (err, bookResults) => {
+        if (err) {
+          return db.rollback(() => {
+            console.error('Error fetching book details:', err);
+            res.status(500).json({ error: 'Database error while fetching book details' });
+          });
+        }
+        
+        if (bookResults.length === 0) {
+          return db.rollback(() => {
+            res.status(404).json({ error: `Book with ID ${item.bookId} not found` });
+          });
+        }
+        
+        const book = bookResults[0];
+        
+        if (book.stock < item.quantity) {
+          return db.rollback(() => {
+            res.status(400).json({ 
+              error: `Insufficient stock for book "${book.title}". Available: ${book.stock}, Requested: ${item.quantity}` 
+            });
+          });
+        }
+        
+        const itemTotal = book.price * item.quantity;
+        totalAmount += itemTotal;
+        
+        processedItems.push({
+          bookId: item.bookId,
+          quantity: item.quantity,
+          unitPrice: book.price,
+          title: book.title
+        });
+        
+        itemsProcessed++;
+        
+        if (itemsProcessed === items.length) {
+          const orderSql = "INSERT INTO orders (customerId, totalAmount) VALUES (?, ?)";
+          
+          db.query(orderSql, [customerId, totalAmount], (err, orderResult) => {
+            if (err) {
+              return db.rollback(() => {
+                console.error('Error creating order:', err);
+                res.status(500).json({ error: 'Error creating order' });
+              });
+            }
+            
+            const orderId = orderResult.insertId;
+            console.log(`Order created with ID: ${orderId}`);
+            
+            let itemsInserted = 0;
+            
+            processedItems.forEach((processedItem) => {
+              const itemSql = "INSERT INTO orderItems (orderId, bookId, quantity, unitPrice) VALUES (?, ?, ?, ?)";
+              
+              db.query(itemSql, [orderId, processedItem.bookId, processedItem.quantity, processedItem.unitPrice], (err) => {
+                if (err) {
+                  return db.rollback(() => {
+                    console.error('Error inserting order item:', err);
+                    res.status(500).json({ error: 'Error inserting order items' });
+                  });
+                }
+                
+                const updateStockSql = "UPDATE books SET stock = stock - ? WHERE id = ?";
+                
+                db.query(updateStockSql, [processedItem.quantity, processedItem.bookId], (err) => {
+                  if (err) {
+                    return db.rollback(() => {
+                      console.error('Error updating stock:', err);
+                      res.status(500).json({ error: 'Error updating book stock' });
+                    });
+                  }
+                  
+                  itemsInserted++;
+                  
+                  if (itemsInserted === processedItems.length) {
+                    db.commit((err) => {
+                      if (err) {
+                        return db.rollback(() => {
+                          console.error('Error committing transaction:', err);
+                          res.status(500).json({ error: 'Error committing order' });
+                        });
+                      }
+                      
+                      console.log(`Order ${orderId} completed successfully`);
+                      res.status(201).json({
+                        message: "Order created successfully",
+                        orderId: orderId,
+                        customerId: customerId,
+                        totalAmount: totalAmount,
+                        items: processedItems
+                      });
+                    });
+                  }
+                });
+              });
+            });
+          });
+        }
+      });
+    });
+  });
+});
+
+// Endpoint to get order history for a customer
+app.get('/orders/customer/:customerId', (req, res) => {
+  const customerId = req.params.customerId;
+  
+  console.log(`Fetching order history for customer ID: ${customerId}`);
+  
+  if (isNaN(customerId) || customerId <= 0) {
+    return res.status(400).json({ error: "Invalid customer ID" });
+  }
+  
   const sql = `
-    UPDATE books SET title = ?, isbn = ?, price = ?, publication_year = ?, stock = ?, author_name = ?, category = ?
-    WHERE id = ?
+    SELECT 
+      o.orderId, 
+      o.orderDate, 
+      o.totalAmount,
+      oi.itemId,
+      oi.bookId,
+      oi.quantity,
+      oi.unitPrice,
+      b.title,
+      b.author_name
+    FROM orders o
+    LEFT JOIN orderItems oi ON o.orderId = oi.orderId
+    LEFT JOIN books b ON oi.bookId = b.id
+    WHERE o.customerId = ?
+    ORDER BY o.orderDate DESC, oi.itemId
   `;
-
-  db.query(sql, [title, isbn, price, publication_year, stock, author_name, category, bookId], (err, result) => {
-    if (err) return res.status(500).json(err);
-    if (result.affectedRows === 0) return res.status(404).json({ message: "Book not found" });
-    return res.json({ message: "Book updated successfully" });
+  
+  db.query(sql, [customerId], (err, results) => {
+    if (err) {
+      console.error('Error fetching order history:', err);
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    const ordersMap = new Map();
+    
+    results.forEach(row => {
+      if (!ordersMap.has(row.orderId)) {
+        ordersMap.set(row.orderId, {
+          orderId: row.orderId,
+          orderDate: row.orderDate,
+          totalAmount: row.totalAmount,
+          items: []
+        });
+      }
+      
+      if (row.itemId) {
+        ordersMap.get(row.orderId).items.push({
+          itemId: row.itemId,
+          bookId: row.bookId,
+          title: row.title,
+          author_name: row.author_name,
+          quantity: row.quantity,
+          unitPrice: row.unitPrice,
+          totalPrice: row.quantity * row.unitPrice
+        });
+      }
+    });
+    
+    const orders = Array.from(ordersMap.values());
+    console.log(`Retrieved ${orders.length} orders for customer ${customerId}`);
+    
+    return res.json(orders);
   });
 });
 
-// DELETE /books/:id
-// Delete a book by ID
-app.delete('/books/:id', (req, res) => {
-  const bookId = req.params.id;
-
-  const sql = "DELETE FROM books WHERE id = ?";
-  db.query(sql, [bookId], (err, result) => {
-    if (err) return res.status(500).json(err);
-    if (result.affectedRows === 0) return res.status(404).json({ message: "Book not found" });
-    return res.json({ message: "Book deleted successfully" });
+// Endpoint to get details of a specific order
+app.get('/orders/:orderId', (req, res) => {
+  const orderId = req.params.orderId;
+  
+  console.log(`Fetching details for order ID: ${orderId}`);
+  
+  if (isNaN(orderId) || orderId <= 0) {
+    return res.status(400).json({ error: "Invalid order ID" });
+  }
+  
+  const sql = `
+    SELECT 
+      o.orderId, 
+      o.orderDate, 
+      o.totalAmount,
+      o.customerId,
+      c.firstName,
+      c.lastName,
+      c.emailAddress,
+      oi.itemId,
+      oi.bookId,
+      oi.quantity,
+      oi.unitPrice,
+      b.title,
+      b.author_name
+    FROM orders o
+    JOIN customers c ON o.customerId = c.customerId
+    LEFT JOIN orderItems oi ON o.orderId = oi.orderId
+    LEFT JOIN books b ON oi.bookId = b.id
+    WHERE o.orderId = ?
+    ORDER BY oi.itemId
+  `;
+  
+  db.query(sql, [orderId], (err, results) => {
+    if (err) {
+      console.error('Error fetching order details:', err);
+      return res.status(500).json({ error: 'Database error', details: err });
+    }
+    
+    if (results.length === 0) {
+      return res.status(404).json({ error: "Order not found" });
+    }
+    
+    const orderData = results[0];
+    const order = {
+      orderId: orderData.orderId,
+      orderDate: orderData.orderDate,
+      totalAmount: orderData.totalAmount,
+      customer: {
+        customerId: orderData.customerId,
+        firstName: orderData.firstName,
+        lastName: orderData.lastName,
+        emailAddress: orderData.emailAddress
+      },
+      items: []
+    };
+    
+    results.forEach(row => {
+      if (row.itemId) {
+        order.items.push({
+          itemId: row.itemId,
+          bookId: row.bookId,
+          title: row.title,
+          author_name: row.author_name,
+          quantity: row.quantity,
+          unitPrice: row.unitPrice,
+          totalPrice: row.quantity * row.unitPrice
+        });
+      }
+    });
+    
+    console.log(`Order details retrieved for ID: ${orderId}`);
+    return res.json(order);
   });
 });
 
-// Start the Server
-const PORT = 3000;
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Unhandled error:', err.stack);
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: 'Something went wrong on our end'
+  });
+});
+
+// Catch-all route for undefined endpoints
+app.use((req, res) => {
+  res.status(404).json({ 
+    error: 'Route not found',
+    message: `Cannot ${req.method} ${req.originalUrl}`
+  });
+});
+const PORT = process.env.PORT || 3000;
+
+// Start the server
 app.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
+  console.log('BookNest Customer API Server is running!');
+  console.log(`Server URL: http://localhost:${PORT}`);
+  console.log('Database: BookNest (MySQL)');
+  console.log('Security: AES-256 password encryption enabled');
+  console.log('Available endpoints:');
+  console.log('BOOK ENDPOINTS (READ-ONLY):');
+  console.log('GET    /                           - Welcome message');
+  console.log('GET    /books                      - Get all books');
+  console.log('GET    /books/search?q=title&minPrice=&maxPrice= - Search books');
+  console.log('CUSTOMER ENDPOINTS:');
+  console.log('POST   /customers/register         - Register new customer');
+  console.log('POST   /customers/login            - Customer login');
+  console.log('GET    /customers/:id              - Get customer profile');
+  console.log('ORDER ENDPOINTS:');
+  console.log('POST   /orders                     - Create new order');
+  console.log('GET    /orders/customer/:customerId - Get customer order history');
+  console.log('GET    /orders/:orderId            - Get specific order details');
+  console.log('NOTE: Books must be added manually via SQL INSERT statements');
+});
+
+// Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('SIGTERM received, shutting down gracefully...');
+  db.end(() => {
+    console.log('Database connection closed.');
+    process.exit(0);
+  });
+});
+
+// Graceful shutdown for SIGINT (Ctrl+C)
+process.on('SIGINT', () => {
+  console.log('SIGINT received, shutting down gracefully...');
+  db.end(() => {
+    console.log('Database connection closed.');
+    process.exit(0);
+  });
 });

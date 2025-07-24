@@ -34,7 +34,7 @@ const BookList = ({ books, cart, onAddToCart }) => {
 
   return (
     <div className="book-list">
-      <h2>Book Inventory</h2>
+      <h2>Book Catalog</h2>
       {(!books || books.length === 0) ? (
         <p>No books available.</p>
       ) : (
