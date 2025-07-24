@@ -1,54 +1,51 @@
-import { useState, useEffect } from 'react'
-import './App.css'
-import BookList from './components/BookList'
-import BookForm from './components/BookForm'
-import SearchBar from './components/SearchBar'
-import { getBooks, searchBooks } from './services/api'
+import { useState } from 'react'
+import Login from './components/Login'
+import Register from './components/Register'
+import MainApp from './MainApp'
 
 function App() {
-  const [books, setBooks] = useState([])
-  const [editingBook, setEditingBook] = useState(null)
+  const [isLoggedIn, setIsLoggedIn] = useState(() => {
+    return localStorage.getItem('isLoggedIn') === 'true'
+  })
 
-  useEffect(() => {
-    fetchBooks()
-  }, [])
+  const [showRegister, setShowRegister] = useState(false)
 
-  const fetchBooks = async () => {
-    const data = await getBooks()
-    setBooks(data)
+  const handleLogin = () => {
+    setIsLoggedIn(true)
+    localStorage.setItem('isLoggedIn', 'true')
   }
 
-  const handleSearch = async (searchTerm) => {
-    if (searchTerm.trim() === '') {
-      fetchBooks()
-    } else {
-      const results = await searchBooks(searchTerm)
-      setBooks(results)
-    }
+  const handleLogout = () => {
+    setIsLoggedIn(false)
+    localStorage.removeItem('isLoggedIn')
   }
 
-  return (
-    <div className="app-container">
-      <h1>Bookstore Inventory Management</h1>
-      <div className="content-container">
-        <div className="form-section">
-          <BookForm 
-            editingBook={editingBook}
-            setEditingBook={setEditingBook}
-            refreshBooks={fetchBooks}
-          />
-        </div>
-        <div className="list-section">
-          <SearchBar onSearch={handleSearch} />
-          <BookList 
-            books={books}
-            setEditingBook={setEditingBook}
-            refreshBooks={fetchBooks}
-          />
-        </div>
-      </div>
-    </div>
-  )
+  const handleShowRegister = () => {
+    setShowRegister(true)
+  }
+
+  const handleRegisterSuccess = () => {
+    setShowRegister(false)
+  }
+
+  const handleCancelRegister = () => {
+    setShowRegister(false)
+  }
+
+  if (isLoggedIn) {
+    return <MainApp onLogout={handleLogout} />
+  }
+
+  if (showRegister) {
+    return (
+      <Register
+        onRegisterSuccess={handleRegisterSuccess}
+        onCancel={handleCancelRegister}
+      />
+    )
+  }
+
+  return <Login onLogin={handleLogin} onShowRegister={handleShowRegister} />
 }
 
 export default App
