@@ -580,7 +580,7 @@ app.listen(PORT, () => {
   console.log(`Server URL: http://localhost:${PORT}`);
   console.log('Database: BookNest (MySQL)');
   console.log('Security: AES-256 password encryption enabled');
-  console.log(`Encryption Key: Loaded from environment variable ✅`);
+  console.log(`Encryption Key: Loaded from environment variable`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
   console.log('Available endpoints:');
   console.log('BOOK ENDPOINTS (READ-ONLY):');
